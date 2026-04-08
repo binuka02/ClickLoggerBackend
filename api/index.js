@@ -20,7 +20,7 @@ try {
     ).toString("utf-8");
     serviceAccount = JSON.parse(serviceAccountJson);
   } else {
-    serviceAccount = require("../serviceAccountKey.json");
+    serviceAccount = require("../firebase.json");
   }
 
   if (!admin.apps.length) {
