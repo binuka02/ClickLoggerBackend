@@ -67,7 +67,7 @@ async function compareDevicePerformance() {
       ? pcDurations.reduce((sum, d) => sum + d, 0) / pcDurations.length
       : 0;
 
-  console.log(`📱 Android Users:`);
+  console.log(` Android Users:`);
   console.log(`   Total taps: ${androidDurations.length}`);
   console.log(`   Mean duration: ${androidMean.toFixed(2)} ms`);
   console.log(
@@ -80,7 +80,7 @@ async function compareDevicePerformance() {
     `   Max: ${androidDurations.length > 0 ? Math.max(...androidDurations).toFixed(2) : 0} ms`,
   );
 
-  console.log(`\n💻 PC Users:`);
+  console.log(`\n  PC Users:`);
   console.log(`   Total taps: ${pcDurations.length}`);
   console.log(`   Mean duration: ${pcMean.toFixed(2)} ms`);
   console.log(
@@ -96,7 +96,7 @@ async function compareDevicePerformance() {
   if (androidDurations.length > 0 && pcDurations.length > 0) {
     const difference = Math.abs(androidMean - pcMean);
     const percentDiff = Math.abs(((pcMean - androidMean) / androidMean) * 100);
-    console.log(`\n📊 Analysis:`);
+    console.log(`\n Analysis:`);
     console.log(`   Absolute difference: ${difference.toFixed(2)} ms`);
     console.log(
       `   PC is ${pcMean > androidMean ? "slower" : "faster"} by ${percentDiff.toFixed(1)}%`,
@@ -148,7 +148,7 @@ async function compareInterfaceTypes() {
         noFeedbackDurations.length
       : 0;
 
-  console.log(`✅ Feedback Shown Interface:`);
+  console.log(` Feedback Shown Interface:`);
   console.log(`   Total taps: ${feedbackDurations.length}`);
   console.log(`   Mean duration: ${feedbackMean.toFixed(2)} ms`);
   console.log(
@@ -161,7 +161,7 @@ async function compareInterfaceTypes() {
     `   Max: ${feedbackDurations.length > 0 ? Math.max(...feedbackDurations).toFixed(2) : 0} ms`,
   );
 
-  console.log(`\n❌ No Feedback Interface:`);
+  console.log(`\n No Feedback Interface:`);
   console.log(`   Total taps: ${noFeedbackDurations.length}`);
   console.log(`   Mean duration: ${noFeedbackMean.toFixed(2)} ms`);
   console.log(
@@ -179,13 +179,13 @@ async function compareInterfaceTypes() {
     const percentDiff = Math.abs(
       ((feedbackMean - noFeedbackMean) / noFeedbackMean) * 100,
     );
-    console.log(`\n📊 Analysis:`);
+    console.log(`\n Analysis:`);
     console.log(`   Absolute difference: ${difference.toFixed(2)} ms`);
     console.log(
       `   Feedback interface is ${feedbackMean > noFeedbackMean ? "slower" : "faster"} by ${percentDiff.toFixed(1)}%`,
     );
     console.log(
-      `\n💡 Insight: ${feedbackMean < noFeedbackMean ? "Showing feedback appears to help users tap faster!" : "Feedback does not appear to improve tap speed."}`,
+      `\n Insight: ${feedbackMean < noFeedbackMean ? "Showing feedback appears to help users tap faster!" : "Feedback does not appear to improve tap speed."}`,
     );
   }
 
@@ -196,162 +196,64 @@ async function compareInterfaceTypes() {
 async function analyzeUserCompletion() {
   console.log("=== QUERY 3: User Completion Analysis ===\n");
 
+  // Get all sessions
   const sessionsSnapshot = await db.collection("tap_sessions").get();
 
-  let totalSessions = 0;
-  const sessionsByBase = {};
+  // Group sessions by sessionId and count total taps
+  const sessionData = {};
 
   sessionsSnapshot.forEach((doc) => {
     const data = doc.data();
-    totalSessions++;
+    const sessionId = data.sessionId;
 
-    // Extract base session ID (first part before potential suffix)
-    // This groups sessions from the same "user" (simplified approach)
-    const sessionId = data.sessionId.toString();
-    const baseId = sessionId.substring(0, Math.max(sessionId.length - 4, 10));
-
-    if (!sessionsByBase[baseId]) {
-      sessionsByBase[baseId] = {
+    if (!sessionData[sessionId]) {
+      sessionData[sessionId] = {
+        totalTaps: 0,
+        deviceType: data.deviceType,
         sessions: [],
-        hasFirstInterface: false,
-        hasSecondInterface: false,
       };
     }
 
-    sessionsByBase[baseId].sessions.push(data);
-
-    // Check which interfaces were used
-    if (data.interfaceVariations) {
-      if (
-        data.interfaceVariations.includes("feedbackshown") ||
-        data.interfaceVariations.includes("nofeedback")
-      ) {
-        if (!sessionsByBase[baseId].hasFirstInterface) {
-          sessionsByBase[baseId].hasFirstInterface = true;
-        } else {
-          sessionsByBase[baseId].hasSecondInterface = true;
-        }
-      }
-    }
+    sessionData[sessionId].totalTaps += data.totalTaps || 0;
+    sessionData[sessionId].sessions.push(data);
   });
 
-  let completedBoth = 0;
-  let completedFirst = 0;
-  let totalUsers = Object.keys(sessionsByBase).length;
-
-  for (const baseId in sessionsByBase) {
-    const userData = sessionsByBase[baseId];
-    if (userData.sessions.length >= 2 && userData.hasSecondInterface) {
-      completedBoth++;
-    } else if (userData.sessions.length === 1) {
-      completedFirst++;
-    }
-  }
-
-  console.log(`👥 Total unique users (sessions): ${totalUsers}`);
-  console.log(`✅ Users who completed BOTH variations: ${completedBoth}`);
-  console.log(
-    `⚠️  Users who only completed FIRST variation: ${completedFirst}`,
-  );
-  console.log(
-    `❌ Users who dropped off: ${totalUsers - completedBoth - completedFirst}`,
-  );
-
-  if (totalUsers > 0) {
-    console.log(`\n📊 Completion Metrics:`);
-    console.log(
-      `   Completion rate: ${((completedBoth / totalUsers) * 100).toFixed(1)}%`,
-    );
-    console.log(
-      `   Drop-off rate: ${(((totalUsers - completedBoth) / totalUsers) * 100).toFixed(1)}%`,
-    );
-    console.log(
-      `   Sessions per user: ${(totalSessions / totalUsers).toFixed(2)}`,
-    );
-  }
-
-  console.log("\n" + "=".repeat(60) + "\n");
-}
-
-// Bonus Query: Learning Effect Analysis
-async function analyzeLearningEffect() {
-  console.log("=== BONUS: Learning Effect Analysis ===\n");
-  console.log(
-    "Analyzing if users get faster as they progress through taps...\n",
-  );
-
-  const tapsSnapshot = await db
-    .collection("tap_logs")
-    .orderBy("sessionId")
-    .orderBy("tapSequenceNumber")
-    .get();
-
-  const sessionData = {};
-
-  tapsSnapshot.forEach((doc) => {
-    const data = doc.data();
-    if (!sessionData[data.sessionId]) {
-      sessionData[data.sessionId] = [];
-    }
-    sessionData[data.sessionId].push(data);
-  });
-
-  let firstTenDurations = [];
-  let lastTenDurations = [];
-  let completeSessions = 0;
+  let completedBoth = 0; // 100 clicks (2 rounds completed)
+  let droppedAfterFirst = 0; // 50 clicks (1 round only)
+  let other = 0; // Partial/incomplete
 
   for (const sessionId in sessionData) {
-    const taps = sessionData[sessionId].sort(
-      (a, b) => a.tapSequenceNumber - b.tapSequenceNumber,
-    );
+    const session = sessionData[sessionId];
 
-    if (taps.length >= 40) {
-      completeSessions++;
-      const first10 = taps
-        .slice(0, 10)
-        .map((t) => t.duration)
-        .filter((d) => d > 0);
-      const last10 = taps
-        .slice(-10)
-        .map((t) => t.duration)
-        .filter((d) => d > 0);
-
-      firstTenDurations.push(...first10);
-      lastTenDurations.push(...last10);
+    if (session.totalTaps >= 100) {
+      completedBoth++; // User completed both rounds
+    } else if (session.totalTaps >= 40 && session.totalTaps < 100) {
+      droppedAfterFirst++; // User completed ~1 round but dropped off
+    } else {
+      other++; // Incomplete/abandoned early
     }
   }
 
-  if (firstTenDurations.length > 0 && lastTenDurations.length > 0) {
-    const firstTenMean =
-      firstTenDurations.reduce((sum, d) => sum + d, 0) /
-      firstTenDurations.length;
-    const lastTenMean =
-      lastTenDurations.reduce((sum, d) => sum + d, 0) / lastTenDurations.length;
+  const totalUsers = Object.keys(sessionData).length;
 
-    console.log(
-      `🎯 First 10 taps (across ${completeSessions} complete sessions):`,
-    );
-    console.log(`   Mean duration: ${firstTenMean.toFixed(2)} ms`);
-    console.log(`   Sample size: ${firstTenDurations.length} taps`);
+  console.log(` Total unique users (sessions): ${totalUsers}`);
+  console.log(` Users who completed BOTH rounds (100 taps): ${completedBoth}`);
+  console.log(
+    ` Users who dropped off after FIRST round (~50 taps): ${droppedAfterFirst}`,
+  );
+  console.log(` Users who abandoned early (<40 taps): ${other}`);
 
-    console.log(`\n🏁 Last 10 taps:`);
-    console.log(`   Mean duration: ${lastTenMean.toFixed(2)} ms`);
-    console.log(`   Sample size: ${lastTenDurations.length} taps`);
-
-    const improvement = ((firstTenMean - lastTenMean) / firstTenMean) * 100;
-    console.log(`\n📊 Learning Effect:`);
+  if (totalUsers > 0) {
+    console.log(`\n Completion Metrics:`);
     console.log(
-      `   ${firstTenMean > lastTenMean ? "✅ Users got FASTER" : "⚠️  Users got SLOWER"}`,
+      `   Full completion rate: ${((completedBoth / totalUsers) * 100).toFixed(1)}%`,
     );
     console.log(
-      `   Change: ${Math.abs(improvement).toFixed(1)}% ${improvement > 0 ? "improvement" : "decline"}`,
+      `   Drop-off after first round: ${((droppedAfterFirst / totalUsers) * 100).toFixed(1)}%`,
     );
     console.log(
-      `   Absolute difference: ${Math.abs(firstTenMean - lastTenMean).toFixed(2)} ms`,
+      `   Early abandonment: ${((other / totalUsers) * 100).toFixed(1)}%`,
     );
-  } else {
-    console.log("⚠️  Not enough data for learning effect analysis");
-    console.log("   Need at least one complete session (40+ taps)");
   }
 
   console.log("\n" + "=".repeat(60) + "\n");
@@ -367,16 +269,14 @@ async function runAllAnalyses() {
     await compareDevicePerformance();
     await compareInterfaceTypes();
     await analyzeUserCompletion();
-    await analyzeLearningEffect();
 
-    console.log("✅ Analysis Complete!\n");
+    console.log(" Analysis Complete!\n");
     process.exit(0);
   } catch (error) {
-    console.error("❌ Error running analysis:", error);
+    console.error(" Error running analysis:", error);
     console.error(error.stack);
     process.exit(1);
   }
 }
 
-// Run the analyses
 runAllAnalyses();

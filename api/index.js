@@ -1,30 +1,54 @@
 const express = require("express");
 const cors = require("cors");
 const admin = require("firebase-admin");
+require("dotenv").config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// CORS Configuration
+const corsOptions = {
+  origin: process.env.FRONTEND_URL || "*",
+  methods: ["GET", "POST"],
+  credentials: true,
+};
+
 // Middleware
-app.use(cors());
+app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Initialize Firebase Admin SDK
-// NOTE: You need to download your Firebase service account key JSON file
-// from Firebase Console -> Project Settings -> Service Accounts
-// and save it as 'firebase.json' in the same directory
-try {
-  const serviceAccount = require("./firebase.json");
+let serviceAccount;
 
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
-  });
+try {
+  if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+    // Production: use base64-encoded environment variable
+    console.log("Using Firebase credentials from environment variable");
+    const serviceAccountBase64 = process.env.FIREBASE_SERVICE_ACCOUNT;
+    const serviceAccountJson = Buffer.from(
+      serviceAccountBase64,
+      "base64",
+    ).toString("utf-8");
+    serviceAccount = JSON.parse(serviceAccountJson);
+  } else {
+    // Development: use local file
+    console.log("Using Firebase credentials from serviceAccountKey.json");
+    serviceAccount = require("./serviceAccountKey.json");
+  }
+
+  if (!admin.apps.length) {
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount),
+    });
+  }
 
   console.log("Firebase Admin initialized successfully");
 } catch (error) {
   console.error("Error initializing Firebase Admin:", error.message);
-  console.log("Please add your firebase.json file to use Firebase");
+  console.log(
+    "Please add your serviceAccountKey.json file or set FIREBASE_SERVICE_ACCOUNT environment variable",
+  );
 }
 
 const db = admin.firestore();
@@ -103,12 +127,14 @@ app.post("/saveTaps", async (req, res) => {
     for (const tap of tapArray) {
       const tapRef = db.collection("tap_logs").doc();
 
+      // Generate unique tap ID: sessionId + tapSequenceNumber + timestamp
+      const tapId = `${id}_${tap.tapSequenceNumber || 0}_${tap.startTimestamp || Date.now()}`;
+
       const tapData = {
+        tapId: tapId,
         sessionId: id,
         deviceType: deviceType,
         tapSequenceNumber: tap.tapSequenceNumber || 0,
-        startTimestamp: tap.startTimestamp || 0,
-        endTimestamp: tap.endTimestamp || 0,
         startDateTime: tap.startTimestamp
           ? new Date(tap.startTimestamp).toISOString()
           : null,
@@ -180,7 +206,4 @@ app.get("/stats/:sessionId", async (req, res) => {
 });
 
 // Start server
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-  console.log(`API endpoint: http://localhost:${PORT}/saveTaps`);
-});
+module.exports = app;
